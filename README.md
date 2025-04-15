@@ -1,7 +1,3 @@
-#  FastAPI backend (H1)
-#  Next.js frontend (TypeScript)
-#  yt-dlp for media extraction
-
 # Media Fetcher
 
 A simple web app that allows users to fetch publicly available video content using a video URL.
@@ -26,17 +22,9 @@ Built with:
    .\venv\Scripts\Activate.ps1
 
 
-<pre> \```bash npm run dev \``` </pre>
 
-Use `uvicorn main:app --reload` to run the server
+### 🔗 Connect with me
 
----
-
-[Click here](http://localhost:3000)
-
-
-
-
-
-## Section Title (H2)
-### Subsection Title (H3)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Festim_Reçi-blue?style=flat&logo=linkedin)](https://www.linkedin.com/in/festimre%C3%A7i/)
+[![Instagram @festim.reqi15](https://img.shields.io/badge/Instagram-festim.reqi15-ff69b4?style=flat&logo=instagram)](https://www.instagram.com/festim.reqi15/)
+[![Instagram @fcodedesign](https://img.shields.io/badge/Instagram-fcodedesign-e4405f?style=flat&logo=instagram)](https://www.instagram.com/fcodedesign/)
