@@ -4,9 +4,9 @@ A simple web app that allows users to fetch publicly available video content usi
 
 Built with:
 
-- ⚙️ FastAPI backend  
-- ⚛️ Next.js frontend (TypeScript)  
-- 🎥 yt-dlp for media extraction (supports many platforms)  
+- ⚙️ FastAPI backend
+- ⚛️ Next.js frontend (TypeScript)
+- 🎥 yt-dlp for media extraction (supports many platforms)
 
 > ⚠️ This tool is intended for educational purposes only. Always respect the Terms of Service of any platform you use.
 
@@ -16,12 +16,11 @@ Built with:
 
 ### ✅ Backend (FastAPI)
 
-1. **Activate virtual environment**  
+1. **Activate virtual environment**
    ```powershell
    cd C:\path\to\yt-backend
    .\venv\Scripts\Activate.ps1
-
-
+   ```
 
 ### 🔗 Connect with me
 

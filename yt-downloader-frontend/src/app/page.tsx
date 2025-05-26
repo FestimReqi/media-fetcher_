@@ -1,242 +1,266 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import axios from "axios";
-import Cookies from "js-cookie";
+// import Cookies from "js-cookie";
 import {
-  Facebook,
   Github,
-  Linkedin,
-  ChevronsLeftRightEllipsis,
   Youtube,
+  Linkedin,
+  Facebook,
+  Instagram,
+  AlertCircle,
+  ChevronsLeftRightEllipsis,
 } from "lucide-react";
 
 export default function Home() {
   const [url, setUrl] = useState("");
-  const [downloaded, setDownloaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
-
-  useEffect(() => {
-    Cookies.set("visited", "true", { expires: 7 });
-    const alreadyVisited = Cookies.get("visited");
-    console.log("Visited before?", alreadyVisited);
-  }, []);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const isValidYoutubeUrl = (url: string): boolean => {
     try {
       const parsed = new URL(url);
-      return ["www.youtube.com", "youtube.com", "youtu.be"].includes(parsed.hostname);
+      return ["www.youtube.com", "youtube.com", "youtu.be"].includes(
+        parsed.hostname
+      );
     } catch {
       return false;
     }
   };
 
-  const getCleanUrl = (url: string): string => {
-    try {
-      const urlObj = new URL(url);
-      // Remove any unnecessary query parameters except 'v'
-      const videoId = urlObj.searchParams.get('v');
-      if (videoId) {
-        return `https://www.youtube.com/watch?v=${videoId}`;
-      }
-      // Handle youtu.be format
-      if (urlObj.hostname === 'youtu.be') {
-        return `https://www.youtube.com/watch?v=${urlObj.pathname.slice(1)}`;
-      }
-      return url;
-    } catch {
-      return url;
-    }
-  };
-
   const handleDownload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setError("");
+    setSuccess("");
+
     if (!url || !isValidYoutubeUrl(url)) {
-      alert("Please enter a valid YouTube URL");
+      setError("Please enter a valid YouTube URL");
       return;
     }
-    setDownloaded(true);
-    setProgress(0); // reset
+
+    const cookiesInput = e.currentTarget.querySelector(
+      'input[name="cookies_file"]'
+    ) as HTMLInputElement;
+
+    if (!cookiesInput?.files?.length) {
+      setError("Cookies file is required for downloading");
+      return;
+    }
+
+    setIsLoading(true);
+    setProgress(0);
 
     try {
       const formData = new FormData();
-      formData.append("url", getCleanUrl(url));  // Use the cleaning function
-
-      const cookiesInput = e.currentTarget.querySelector(
-        'input[name="cookies_file"]'
-      ) as HTMLInputElement;
-
-      if (cookiesInput?.files?.length) {
-        formData.append("cookies_file", cookiesInput.files[0]);
-      }
+      formData.append("url", url);
+      formData.append("cookies_file", cookiesInput.files[0]);
 
       const res = await axios.post(
-        "https://media-fetcher-backend.onrender.com/download",
+        "https://media-fetcher-backend-2mcm.onrender.com/download",
         formData,
         {
           responseType: "blob",
+          timeout: 300000,
           onDownloadProgress: (progressEvent) => {
             if (progressEvent.total) {
-              const percentCompleted = Math.round(
-                (progressEvent.loaded * 100) / progressEvent.total
+              setProgress(
+                Math.round((progressEvent.loaded * 100) / progressEvent.total)
               );
-              setProgress(percentCompleted);
             }
           },
-          validateStatus: () => true,
         }
       );
 
-      const contentType = res.headers["content-type"] || "";
-      if (!res.status.toString().startsWith("2")) {
-        if (contentType.includes("application/json")) {
-          // Convert Blob to text safely
-          const errorText = await new Response(res.data).text();
-          const { detail } = JSON.parse(errorText);
-          throw new Error(detail || "Unknown error");
-        } else {
-          throw new Error(`Download failed (status ${res.status})`);
-        }
-      }
-
+      // Handle successful download
       const blob = new Blob([res.data], { type: "video/mp4" });
+      const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
+      link.href = downloadUrl;
       link.download = "video.mp4";
+      document.body.appendChild(link);
       link.click();
-    } catch (err: unknown) {
-      let msg = "Something went wrong.";
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+
+      setSuccess("Download completed successfully!");
+    } catch (err) {
+      let errorMessage = "Download failed. Please try again.";
 
       if (axios.isAxiosError(err)) {
-        const contentType = err.response?.headers["content-type"] || "";
-
-        if (
-          err.response &&
-          err.response.status === 400 &&
-          contentType.includes("application/json")
-        ) {
-          const errorBlob = err.response.data;
-          const errorText = await new Response(errorBlob).text();
-          try {
-            const { detail } = JSON.parse(errorText);
-            msg = detail || msg;
-          } catch {
-            msg = errorText || msg;
+        if (err.response) {
+          // Try to parse error message from backend
+          if (err.response.data instanceof Blob) {
+            try {
+              const errorText = await err.response.data.text();
+              const errorData = JSON.parse(errorText);
+              errorMessage = errorData.detail || errorMessage;
+            } catch {
+              errorMessage = "Invalid server response";
+            }
+          } else if (typeof err.response.data === "object") {
+            errorMessage = err.response.data.message || errorMessage;
           }
+        } else if (err.request) {
+          errorMessage =
+            "No response from server. Please check your connection.";
         }
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
       }
 
-      console.error("Download error:", msg);
-      alert(msg);
+      setError(errorMessage);
     } finally {
-      setDownloaded(false);
-      setProgress(0); // reset after complete
+      setIsLoading(false);
     }
   };
 
   return (
-    <main style={{ padding: "2rem" }}>
-      <h1 className="text-2xl font-bold mb-4 text-center underline underline-offset-4 text-red-500 flex items-center justify-center gap-2">
+    <main className="p-8 max-w-2xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6 text-center underline underline-offset-4 text-red-500 flex items-center justify-center gap-2">
         <Youtube className="text-2xl" />
-        video-extractor
+        YouTube Video Downloader
       </h1>
-      <form
-        onSubmit={handleDownload}
-        className="flex flex-col items-center justify-center gap-4"
-        encType="multipart/form-data"
-      >
-        {/* Input for YouTube URL */}
-        <input
-          type="text"
-          name="url" // Correct name for the URL
-          placeholder="Enter YouTube URL"
-          value={url}
-          className="border-2 border-red-300 rounded-md p-2 w-80"
-          onChange={(e) => setUrl(e.target.value)}
-        />
 
-        {/* Input for cookies.txt file upload */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded flex items-start gap-2">
+          <AlertCircle className="flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
-        <input
-          type="file"
-          name="cookies_file"
-          accept=".txt"
-          className="border-2 border-red-300 rounded-md p-2 w-80"
-        />
+      {success && (
+        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded">
+          {success}
+        </div>
+      )}
 
-        {/* Submit Button */}
+      <form onSubmit={handleDownload} className="space-y-4">
+        <div>
+          <label htmlFor="url" className="block mb-1 font-medium">
+            YouTube URL
+          </label>
+          <input
+            id="url"
+            type="text"
+            name="url"
+            placeholder="https://www.youtube.com/watch?v=..."
+            value={url}
+            className="w-full p-2 border rounded focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            onChange={(e) => setUrl(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="cookies_file" className="block mb-1 font-medium">
+            Cookies File (required)
+            <span className="text-xs block text-gray-500 mt-1">
+              Use the{" "}
+              <a
+                href="https://chrome.google.com/webstore/detail/get-cookiestxt/kjbnjopbmjenkgaacgkildjjfjjgmjlg"
+                target="_blank"
+                className="underline text-blue-600"
+              >
+                Get cookies.txt
+              </a>{" "}
+              Chrome extension after logging into YouTube. Upload the generated
+              `.txt` file here.
+            </span>
+          </label>
+          <input
+            id="cookies_file"
+            type="file"
+            name="cookies_file"
+            accept=".txt"
+            className="w-full p-2 border rounded file:mr-2 file:py-1 file:px-3 file:border-0 file:text-sm file:font-medium file:bg-red-50 file:text-red-700 hover:file:bg-red-100"
+          />
+        </div>
+
         <button
           type="submit"
-          className="bg-red-500 text-white px-4 py-2 rounded-md cursor-pointer hover:bg-red-600 w-40 h-10 relative"
-          disabled={downloaded}
+          disabled={isLoading}
+          className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
         >
-          {downloaded ? "Downloading..." : "Download"}
+          {isLoading ? (
+            <>
+              <span className="mr-2">Downloading ({progress}%)</span>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            </>
+          ) : (
+            "Download Video"
+          )}
         </button>
-
-        {/* Progress Bar (only when downloading) */}
-        {downloaded && (
-          <div className="w-80 mt-2 text-sm">
-            <div className="text-center mb-1">{progress}%</div>
-            <div className="w-full h-2 bg-gray-200 rounded">
-              <div
-                className="h-full bg-red-500 rounded transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              ></div>
-            </div>
-          </div>
-        )}
       </form>
-      <p className="text-center text-gray-500 mt-4">
-        This is a simple media fetching tool built with Next.js and Tailwind
-        CSS.
-        <br />
-        It allows users to extract and download publicly accessible video
-        content in MP4 format using a video URL.
-      </p>
-      <p className="text-center text-gray-500 mt-4 flex items-center justify-center gap-2 sm:flex-row flex-col">
-        Made with ❤️ by{" "}
-        <a
-          href="https://github.com/festimrecic"
-          target="_blank"
-          className="text-white hover:text-white mx-2 gap-2 flex bg-gray-900 rounded-xs p-2 hover:bg-gray-700 font-bold"
-        >
-          Festim Reçi
-        </a>
-      </p>
-      <p className="text-center text-gray-500 mt-4 flex items-center justify-center gap-2 flex-col md:flex-row">
-        <a
-          href="https://github.com/FestimReqi"
-          target="_blank"
-          className="text-white hover:text-white w-[130px] h-[40px] mx-2 gap-2 flex bg-gray-900 rounded-xs p-2 hover:bg-gray-700"
-        >
-          <Github />
-          GitHub
-        </a>
-        <a
-          href="https://www.linkedin.com/in/festimreçi/"
-          target="_blank"
-          className="text-white hover:text-white w-[130px] h-[40px] gap-2 mx-2 flex bg-blue-500 rounded-xs p-2 hover:bg-blue-600"
-        >
-          <Linkedin />
-          LinkedIn
-        </a>
-        <a
-          href="https://www.facebook.com/festim00/"
-          target="_blank"
-          className="text-white hover:text-white-600 w-[130px] h-[40px] mx-2 flex bg-blue-500 rounded-xs p-2 hover:bg-blue-600"
-        >
-          <Facebook />
-          Facebook
-        </a>
-        <a
-          href="https://festimreqi.github.io/festim/"
-          target="_blank"
-          className="text-white hover:text-white w-[130px] h-[40px] mx-2 flex gap-2 bg-yellow-500 rounded-xs p-2 hover:bg-yellow-600"
-        >
-          <ChevronsLeftRightEllipsis />
-          Portfolio
-        </a>
-      </p>
+
+      <div className="mt-8 text-center text-gray-600">
+        <p className="mb-4">
+          This tool allows you to download YouTube videos by providing a valid
+          cookies file.
+        </p>
+        <div className="mt-10 text-center text-gray-600 space-y-4">
+          <p className="flex flex-col sm:flex-row items-center justify-center gap-2 text-sm">
+            Made with ❤️ by
+            <a
+              href="https://github.com/FestimReqi"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white font-bold bg-gray-900 hover:bg-gray-700 px-3 py-1 rounded transition"
+            >
+              Festim Reçi
+            </a>
+          </p>
+
+          <div className="flex flex-wrap justify-center gap-3 mt-2">
+            <a
+              href="https://github.com/FestimReqi"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-[130px] h-[40px] text-white bg-gray-900 hover:bg-gray-700 rounded p-2"
+            >
+              <Github />
+              GitHub
+            </a>
+            <a
+              href="https://www.linkedin.com/in/festimreçi/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-[130px] h-[40px] text-white bg-blue-500 hover:bg-blue-600 rounded p-2"
+            >
+              <Linkedin />
+              LinkedIn
+            </a>
+            <a
+              href="https://www.facebook.com/festim00/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-[130px] h-[40px] text-white bg-blue-500 hover:bg-blue-600 rounded p-2"
+            >
+              <Facebook />
+              Facebook
+            </a>
+            <a
+              href="https://www.instagram.com/festim.reqi15/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-[130px] h-[40px] text-white bg-fuchsia-500 hover:bg-fuchsia-600 rounded p-2"
+            >
+              <Instagram />
+              Instagram
+            </a>
+            <a
+              href="https://festimreci-dev.netlify.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-[130px] h-[40px] text-white bg-yellow-500 hover:bg-yellow-600 rounded p-2"
+            >
+              <ChevronsLeftRightEllipsis />
+              Portfolio
+            </a>
+          </div>
+        </div>
+      </div>
     </main>
   );
 }
